@@ -5,6 +5,7 @@
   "homepage": ".",
   "main": "electron.js",
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
     "@types/lodash": "^4.17.19",
     "concurrently": "^9.2.0",
     "electron": "^37.1.0",
@@ -52,9 +53,10 @@
     "electron": "electron .",
     "electron-dev": "react-scripts build && electron . --dev",
     "electron-builder": "electron-builder",
-    "electron-build-win": "react-scripts build && electron-builder --win",
-    "electron-build-mac": "react-scripts build && electron-builder --mac",
-    "electron-build": "react-scripts build && electron-builder"
+    "electron-rebuild": "electron-rebuild -f -w sqlite3",
+    "electron-build-win": "react-scripts build && npm run electron-rebuild && electron-builder --win",
+    "electron-build-mac": "react-scripts build && npm run electron-rebuild && electron-builder --mac",
+    "electron-build": "react-scripts build && npm run electron-rebuild && electron-builder"
   },
   "eslintConfig": {
     "extends": [

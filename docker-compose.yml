@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  meeting-app:
+    build: .
+    ports:
+      - "13001:13001"
+    volumes:
+      - ./userData:/app/userData
+    environment:
+      - NODE_ENV=production
+      - PORT=13001
+      - CLIENT_PORT=3000
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:13001/api/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    command: >
+      sh -c "
+      echo 'Starting both backend and frontend services...' &&
+      node server.js &
+      serve -s build -l 3000
+      "
+
+  # Uncomment and configure these if you want to run Ollama/Whisper in containers
+  # ollama:
+  #   image: ollama/ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  # 
+  # whisper:
+  #   image: ghcr.io/ahmetoner/whisper-asr-webservice:latest
+  #   ports:
+  #     - "9000:9000"
+  #   environment:
+  #     - ASR_MODEL=base
+  #   volumes:
+  #     - whisper_cache:/root/.cache
+
+# volumes:
+#   ollama_data:
+#   whisper_cache:
