@@ -1,0 +1,31 @@
+appId: com.example.meetingminutes
+productName: AI Meeting Minutes
+copyright: Copyright © 2025
+directories:
+  output: dist
+  buildResources: build
+files:
+  - "build/**/*"
+  - "!build/electron.js"  # Prevent duplicate
+  - "electron.js"
+  - "package.json"
+  - "server.js"
+  - "database/**/*"
+extraMetadata:
+  main: "./electron.js"
+extraResources:
+  - from: "database"
+    to: "database"
+win:
+  target: nsis
+  icon: "build/logo512.png"
+mac:
+  target: dmg
+  icon: "build/logo512.png"
+linux:
+  target: AppImage
+  icon: "build/logo512.png"
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

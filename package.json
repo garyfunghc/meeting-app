@@ -1,0 +1,77 @@
+{
+  "name": "meeting-minutes-react",
+  "version": "0.1.0",
+  "private": true,
+  "homepage": ".",
+  "main": "electron.js",
+  "devDependencies": {
+    "@types/lodash": "^4.17.19",
+    "concurrently": "^9.2.0",
+    "electron": "^37.1.0",
+    "electron-builder": "^26.0.12",
+    "nodemon": "^3.1.10",
+    "wait-on": "^8.0.3"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.126",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "axios": "^1.6.7",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
+    "multer": "^1.4.4",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "react-scripts": "5.0.1",
+    "socket.io": "^4.7.2",
+    "sqlite3": "^5.1.6",
+    "typescript": "^4.9.5",
+    "uuid": "^9.0.1",
+    "web-vitals": "^2.1.4",
+    "zustand": "^5.0.6"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "dev": "nodemon server.js",
+    "start-backend": "node server.js",
+    "electron": "electron .",
+    "electron-dev": "react-scripts build && electron . --dev",
+    "electron-builder": "electron-builder",
+    "electron-build-win": "react-scripts build && electron-builder --win",
+    "electron-build-mac": "react-scripts build && electron-builder --mac",
+    "electron-build": "react-scripts build && electron-builder"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
