@@ -5,6 +5,7 @@ services:
     build: .
     ports:
       - "13001:13001"
+      - "3000:3000"
     volumes:
       - ./userData:/app/userData
     environment:

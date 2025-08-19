@@ -84,3 +84,35 @@ export const reviewTranscript = async (meetingId: string): Promise<string> => {
   const response = await api.post(`/meeting/${meetingId}/transcription/review`);
   return response.data.transcription;
 };
+
+export const exportTranscriptToCSV = (transcriptJson: Array<{
+  timestamp: string;
+  speaker: string;
+  content: string;
+}>, meetingTitle: string): void => {
+  // Convert transcript data to CSV format
+  const csvData = transcriptJson.map(item => ({
+    Timestamp: item.timestamp,
+    Speaker: item.speaker,
+    Content: item.content
+  }));
+
+  // Create CSV content
+  const csvContent = [
+    ['Timestamp', 'Speaker', 'Content'], // Header row
+    ...csvData.map(item => [item.Timestamp, item.Speaker, item.Content])
+  ].map(row => row.map(field => `"${field.replace(/"/g, '""')}"`).join(',')).join('\n');
+
+  // Create download link
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${meetingTitle.replace(/[^a-zA-Z0-9]/g, '_')}_transcript.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};

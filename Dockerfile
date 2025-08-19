@@ -27,8 +27,9 @@ COPY package*.json ./
 COPY server.js ./
 COPY electron-builder.yml ./
 
-# Install production dependencies
+# Install production dependencies and serve
 RUN npm install --production
+RUN npm install -g serve
 
 # Copy built client from builder stage
 COPY --from=builder /app/build ./build

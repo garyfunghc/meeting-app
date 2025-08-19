@@ -7,6 +7,7 @@ import TranscriptOverwriteModal from './TranscriptOverwriteModal';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import '../jspdf-custom'; // For Chinese font support
+import { exportTranscriptToCSV } from '../services/meetingService';
 interface MeetingViewProps {
   meetingId: string;
   onDeleteMeeting: (id: string) => void;
@@ -358,6 +359,13 @@ const MeetingView: React.FC<MeetingViewProps> = ({ meetingId, onDeleteMeeting })
             }}
           >
             <i className="fas fa-magic"></i> AI Summary
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => exportTranscriptToCSV(transcriptJson, currentMeeting?.title || 'meeting')}
+            disabled={transcriptJson.length === 0}
+          >
+            <i className="fas fa-file-csv"></i> Export CSV
           </button>
         </div>
       </div>
