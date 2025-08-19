@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { debounce } from 'lodash';
 import { useMeetings } from '../hooks/useMeetings';
@@ -12,6 +12,46 @@ interface MeetingViewProps {
   meetingId: string;
   onDeleteMeeting: (id: string) => void;
 }
+
+// Component for auto-resizing textarea
+interface AutoResizeTextareaProps {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
+}
+
+const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({ value, onChange, placeholder }) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Set the height to scrollHeight + a little extra for padding
+      textarea.style.height = `${textarea.scrollHeight + 4}px`;
+    }
+  }, []);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [value, adjustHeight]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChange(e);
+    adjustHeight();
+  };
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value}
+      onChange={handleChange}
+      placeholder={placeholder}
+      style={{ width: '100%', minHeight: '50px', resize: 'vertical' }}
+    />
+  );
+};
 
 const MeetingView: React.FC<MeetingViewProps> = ({ meetingId, onDeleteMeeting }) => {
   const {
@@ -410,10 +450,9 @@ const MeetingView: React.FC<MeetingViewProps> = ({ meetingId, onDeleteMeeting })
                     </datalist>
                   </td>
                   <td className="content-cell">
-                    <textarea
+                    <AutoResizeTextarea
                       value={item.content}
                       onChange={(e) => handleContentChange(i, e.target.value)}
-                      style={{ width: '100%', minHeight: '50px' }}
                     />
                   </td>
                 </tr>
