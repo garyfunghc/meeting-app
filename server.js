@@ -272,6 +272,83 @@ async function generateSummary(transcription, ollamaUrl, ollamaModel = 'qwen3:8b
   }
 }
 
+// LM Studio API functions
+async function reviewWithLMStudio(transcription, apiKey, model, prompt, lmstudioUrl) {
+  try {
+    const response = await axios.post(`${lmstudioUrl}/v1/chat/completions`, {
+      model: model,
+      messages: [
+        {
+          role: 'system',
+          content: `Respond concisely with only the answer to my question. Do not add any extra text, disclaimers, or commentary`
+        },
+        {
+          role: 'user',
+          content: `${prompt || defaultReviewPrompt}: ${transcription}`
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 4000
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      timeout: 1000 * 60 * 60
+    });
+
+    if (!response.data?.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response format from LM Studio');
+    }
+
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('LM Studio review error:', error);
+    if (error.response) {
+      console.error('LM Studio API error response:', error.response.data);
+    }
+    return 'Failed to review transcript with LM Studio. Please check your LM Studio settings and try again.';
+  }
+}
+
+async function generateSummaryWithLMStudio(transcription, apiKey, model, prompt, lmstudioUrl) {
+  try {
+    const response = await axios.post(`${lmstudioUrl}/v1/chat/completions`, {
+      model: model,
+      messages: [
+        {
+          role: 'system',
+          content: ``
+        },
+        {
+          role: 'user',
+          content: `${prompt} ${transcription}`
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: 4000
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      timeout: 1000 * 60 * 60
+    });
+
+    if (!response.data?.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response format from LM Studio');
+    }
+
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('LM Studio summary error:', error);
+    if (error.response) {
+      console.error('LM Studio API error response:', error.response.data);
+    }
+    return 'Failed to generate summary with LM Studio. Please check your LM Studio settings and try again.';
+  }
+}
+
 // API Routes
 
 // Upload audio file and create meeting
@@ -535,54 +612,80 @@ app.post('/api/meeting/:meetingId/transcription/review', async (req, res) => {
         return res.status(400).json({ error: 'No transcription available for review' });
       }
 
-      // Get Ollama settings
-      db.all('SELECT key, value FROM settings WHERE key IN (?, ?)', ['ollama_url', 'ollama_model'], async (err, settings) => {
-        if (err) {
-          return res.status(500).json({ error: 'Failed to get settings' });
-        }
+      // Get AI provider settings
+      db.all('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?, ?)', 
+        ['ai_provider', 'ollama_url', 'ollama_model', 'lmstudio_path', 'lmstudio_api_key', 'lmstudio_model'], 
+        async (err, settings) => {
+          if (err) {
+            return res.status(500).json({ error: 'Failed to get settings' });
+          }
 
-        const settingsMap = {};
-        settings.forEach(setting => {
-          settingsMap[setting.key] = setting.value;
-        });
+          const settingsMap = {};
+          settings.forEach(setting => {
+            settingsMap[setting.key] = setting.value;
+          });
 
-        const ollamaUrl = settingsMap.ollama_url || 'http://localhost:11434';
-        const ollamaModel = settingsMap.ollama_model || 'qwen3:8b';
+          const aiProvider = settingsMap.ai_provider || 'ollama';
 
-        try {
-          const reviewedTranscript = await reviewTrascription(
-            transcriptToReview,
-            ollamaUrl,
-            ollamaModel,
-            `${transcriptToReview}`
-          );
+          try {
+            let reviewedTranscript;
 
-          // Clean up any LLM thinking tags from the response
-          const cleanedTranscript = reviewedTranscript
-            .replace(/<think>.*?<\/think>/gs, '')
-            .replace(/<note>.*?<\/note>/gs, '')
-            .trim();
-
-          // Update meeting with reviewed transcript
-          db.run(
-            'UPDATE meetings SET transcription_with_speaker = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [cleanedTranscript, meetingId],
-            (err) => {
-              if (err) {
-                return res.status(500).json({ error: 'Failed to save reviewed transcript' });
+            if (aiProvider === 'lmstudio') {
+              const lmstudioUrl = settingsMap.lmstudio_path || 'http://localhost:1234';
+              const apiKey = settingsMap.lmstudio_api_key;
+              const model = settingsMap.lmstudio_model || 'local-model';
+              
+              if (!apiKey) {
+                return res.status(400).json({ error: 'LM Studio API key is required' });
               }
 
-              res.json({ 
-                message: 'Transcript reviewed and enhanced successfully',
-                transcription: cleanedTranscript 
-              });
+              reviewedTranscript = await reviewWithLMStudio(
+                transcriptToReview,
+                apiKey,
+                model,
+                `${transcriptToReview}`,
+                lmstudioUrl
+              );
+            } else {
+              // Default to Ollama
+              const ollamaUrl = settingsMap.ollama_url || 'http://localhost:11434';
+              const ollamaModel = settingsMap.ollama_model || 'qwen3:8b';
+
+              reviewedTranscript = await reviewTrascription(
+                transcriptToReview,
+                ollamaUrl,
+                ollamaModel,
+                `${transcriptToReview}`
+              );
             }
-          );
-        } catch (error) {
-          console.error('Review error:', error);
-          res.status(500).json({ error: 'Failed to review transcript' });
+
+            // Clean up any LLM thinking tags from the response
+            const cleanedTranscript = reviewedTranscript
+              .replace(/<think>.*?<\/think>/gs, '')
+              .replace(/<note>.*?<\/note>/gs, '')
+              .trim();
+
+            // Update meeting with reviewed transcript
+            db.run(
+              'UPDATE meetings SET transcription_with_speaker = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [cleanedTranscript, meetingId],
+              (err) => {
+                if (err) {
+                  return res.status(500).json({ error: 'Failed to save reviewed transcript' });
+                }
+
+                res.json({ 
+                  message: 'Transcript reviewed and enhanced successfully',
+                  transcription: cleanedTranscript 
+                });
+              }
+            );
+          } catch (error) {
+            console.error('Review error:', error);
+            res.status(500).json({ error: 'Failed to review transcript' });
+          }
         }
-      });
+      );
     });
   } catch (error) {
     console.error('Review error:', error);
@@ -594,7 +697,6 @@ app.post('/api/meeting/:meetingId/transcription/review', async (req, res) => {
 app.post('/api/summary/:meetingId', async (req, res) => {
   try {
     const { meetingId } = req.params;
-
     // Get meeting transcription with speaker
     db.get('SELECT transcription_with_speaker FROM meetings WHERE id = ?', [meetingId], async (err, meeting) => {
       if (err || !meeting) {
@@ -605,50 +707,76 @@ app.post('/api/summary/:meetingId', async (req, res) => {
         return res.status(400).json({ error: 'No transcription with speaker available for summary generation' });
       }
 
-      // Get Ollama settings and summary prompt
-      db.all('SELECT key, value FROM settings WHERE key IN (?, ?, ?)', ['ollama_url', 'ollama_model', 'summary_prompt'], async (err, settings) => {
-        if (err) {
-          return res.status(500).json({ error: 'Failed to get settings' });
-        }
+      // Get AI provider settings and summary prompt
+      db.all('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?, ?, ?)', 
+        ['ai_provider', 'ollama_url', 'ollama_model', 'lmstudio_path', 'lmstudio_api_key', 'lmstudio_model', 'summary_prompt'], 
+        async (err, settings) => {
+          if (err) {
+            return res.status(500).json({ error: 'Failed to get settings' });
+          }
 
-        const settingsMap = {};
-        settings.forEach(setting => {
-          settingsMap[setting.key] = setting.value;
-        });
+          const settingsMap = {};
+          settings.forEach(setting => {
+            settingsMap[setting.key] = setting.value;
+          });
 
-        const ollamaUrl = settingsMap.ollama_url || 'http://localhost:11434';
-        const ollamaModel = settingsMap.ollama_model || 'qwen3:8b';
-        const prompt = req.body.prompt || 
-          (settingsMap.summary_prompt ? 
-            settingsMap.summary_prompt : 
-            defaultSummaryPrompt);
+          const aiProvider = settingsMap.ai_provider || 'ollama';
+          const prompt = req.body.prompt || 
+            (settingsMap.summary_prompt ? 
+              settingsMap.summary_prompt : 
+              defaultSummaryPrompt);
 
-        try {
-          const summary = await generateSummary(
-            meeting.transcription_with_speaker,
-            ollamaUrl,
-            ollamaModel,
-            prompt
-          );
+          try {
+            let summary;
 
-          // Save summary to database
-          const summaryId = uuidv4();
-          db.run(
-            'INSERT INTO summaries (id, meeting_id, content) VALUES (?, ?, ?)',
-            [summaryId, meetingId, summary],
-            (err) => {
-              if (err) {
-                return res.status(500).json({ error: 'Failed to save summary' });
-              }
+            if (aiProvider === 'lmstudio') {
+              const lmstudioUrl = settingsMap.lmstudio_path || 'http://localhost:1234';
+              const apiKey = settingsMap.lmstudio_api_key;
+              const model = settingsMap.lmstudio_model || 'local-model';
+              
+              // if (!apiKey) {
+              //   return res.status(400).json({ error: 'LM Studio API key is required' });
+              // }
 
-              res.json({ summary });
+              summary = await generateSummaryWithLMStudio(
+                meeting.transcription_with_speaker,
+                apiKey,
+                model,
+                prompt,
+                lmstudioUrl
+              );
+            } else {
+              // Default to Ollama
+              const ollamaUrl = settingsMap.ollama_url || 'http://localhost:11434';
+              const ollamaModel = settingsMap.ollama_model || 'qwen3:8b';
+
+              summary = await generateSummary(
+                meeting.transcription_with_speaker,
+                ollamaUrl,
+                ollamaModel,
+                prompt
+              );
             }
-          );
-        } catch (error) {
-          console.error('Summary error:', error);
-          res.status(500).json({ error: 'Failed to generate summary' });
+
+            // Save summary to database
+            const summaryId = uuidv4();
+            db.run(
+              'INSERT INTO summaries (id, meeting_id, content) VALUES (?, ?, ?)',
+              [summaryId, meetingId, summary],
+              (err) => {
+                if (err) {
+                  return res.status(500).json({ error: 'Failed to save summary' });
+                }
+
+                res.json({ summary });
+              }
+            );
+          } catch (error) {
+            console.error('Summary error:', error);
+            res.status(500).json({ error: 'Failed to generate summary' });
+          }
         }
-      });
+      );
     });
   } catch (error) {
     console.error('Summary error:', error);
@@ -746,7 +874,6 @@ app.get('/api/meeting/:meetingId', (req, res) => {
 // Delete meeting and all associated data
 app.delete('/api/meeting/:meetingId', (req, res) => {
   const { meetingId } = req.params;
-  console.log(meetingId)
   db.get('SELECT * FROM meetings WHERE id = ?', [meetingId], (err, meeting) => {
     if (err) {
       return res.status(500).json({ error: 'Database error' });

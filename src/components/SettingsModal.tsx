@@ -6,8 +6,12 @@ interface SettingsModalProps {
   onClose: () => void;
   onSave: (settings: {
     whisperBasePath: string;
+    aiProvider: 'ollama' | 'lmstudio';
     ollamaPath: string;
     ollamaModel: string;
+    lmstudioPath: string;
+    lmstudioApiKey: string;
+    lmstudioModel: string;
     initialPrompt: string;
     summaryPrompt: string;
   }) => void;
@@ -23,6 +27,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
   } = useSettingsStore();
 
   const [whisperBasePath, setWhisperBasePath] = useState(settings.whisperBasePath);
+  const [aiProvider, setAiProvider] = useState<'ollama' | 'lmstudio'>(settings.aiProvider);
+  const [lmstudioPath, setLmstudioPath] = useState(settings.lmstudioPath || '');
+  const [lmstudioApiKey, setLmstudioApiKey] = useState(settings.lmstudioApiKey || '');
+  const [lmstudioModel, setLmstudioModel] = useState(settings.lmstudioModel || '');
   const [ollamaPath, setOllamaPath] = useState(settings.ollamaPath);
   const [ollamaModel, setOllamaModel] = useState(settings.ollamaModel);
   const [initialPrompt, setInitialPrompt] = useState(settings.initialPrompt);
@@ -38,8 +46,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
 
   useEffect(() => {
     setWhisperBasePath(settings.whisperBasePath);
+    setAiProvider(settings.aiProvider);
     setOllamaPath(settings.ollamaPath);
     setOllamaModel(settings.ollamaModel);
+    setLmstudioPath(settings.lmstudioPath || '');
+    setLmstudioApiKey(settings.lmstudioApiKey || '');
+    setLmstudioModel(settings.lmstudioModel || '');
     setInitialPrompt(settings.initialPrompt);
     setSummaryPrompt(settings.summaryPrompt || '');
   }, [settings]);
@@ -52,8 +64,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
     try {
       const newSettings = {
         whisperBasePath,
+        aiProvider,
         ollamaPath,
         ollamaModel,
+        lmstudioPath,
+        lmstudioApiKey,
+        lmstudioModel,
         initialPrompt,
         summaryPrompt
       };
@@ -94,42 +110,115 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
         <h3>Settings</h3>
         <form onSubmit={handleSubmit} style={{ marginTop: '1rem' }}>
           <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <label>AI Provider</label>
+            <select
+              value={aiProvider}
+              onChange={(e) => setAiProvider(e.target.value as 'ollama' | 'lmstudio')}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                borderRadius: '4px',
+                border: '1px solid #ddd'
+              }}
+            >
+              <option value="ollama">Ollama</option>
+              <option value="lmstudio">LM Studio</option>
+            </select>
+          </div>
+
+          {aiProvider === 'ollama' && (
+            <>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Ollama Path</label>
+                <input
+                  type="text"
+                  value={ollamaPath}
+                  onChange={(e) => setOllamaPath(e.target.value)}
+                  placeholder="Enter Ollama path (e.g., http://localhost:11434)"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Ollama Model</label>
+                <input
+                  type="text"
+                  value={ollamaModel}
+                  onChange={(e) => setOllamaModel(e.target.value)}
+                  placeholder="Enter Ollama model (e.g., llama2, mistral)"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+            </>
+          )}
+
+
+          {aiProvider === 'lmstudio' && (
+            <>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>LM Studio Path</label>
+                <input
+                  type="text"
+                  value={lmstudioPath}
+                  onChange={(e) => setLmstudioPath(e.target.value)}
+                  placeholder="Enter LM Studio path (e.g., http://localhost:1234)"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>LM Studio API Key</label>
+                <input
+                  type="password"
+                  value={lmstudioApiKey}
+                  onChange={(e) => setLmstudioApiKey(e.target.value)}
+                  placeholder="Enter LM Studio API key"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>LM Studio Model</label>
+                <input
+                  type="text"
+                  value={lmstudioModel}
+                  onChange={(e) => setLmstudioModel(e.target.value)}
+                  placeholder="Enter LM Studio model name"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+            </>
+          )}
+
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label>Whisper Base Path</label>
             <input
               type="text"
               value={whisperBasePath}
               onChange={(e) => setWhisperBasePath(e.target.value)}
               placeholder="Enter Whisper base path"
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                borderRadius: '4px',
-                border: '1px solid #ddd'
-              }}
-            />
-          </div>
-          <div className="form-group" style={{ marginBottom: '1rem' }}>
-            <label>Ollama Path</label>
-            <input
-              type="text"
-              value={ollamaPath}
-              onChange={(e) => setOllamaPath(e.target.value)}
-              placeholder="Enter Ollama path"
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                borderRadius: '4px',
-                border: '1px solid #ddd'
-              }}
-            />
-          </div>
-          <div className="form-group" style={{ marginBottom: '1rem' }}>
-            <label>Ollama Model</label>
-            <input
-              type="text"
-              value={ollamaModel}
-              onChange={(e) => setOllamaModel(e.target.value)}
-              placeholder="Enter Ollama model"
               style={{
                 width: '100%',
                 padding: '0.5rem',

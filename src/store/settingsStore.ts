@@ -12,8 +12,12 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>((set) => ({
   settings: {
     whisperBasePath: '',
+    aiProvider: 'ollama',
     ollamaPath: '',
     ollamaModel: '',
+    lmstudioPath: '',
+    lmstudioApiKey: '',
+    lmstudioModel: '',
     initialPrompt: '',
     summaryPrompt: ''
   },
