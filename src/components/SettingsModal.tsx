@@ -6,12 +6,15 @@ interface SettingsModalProps {
   onClose: () => void;
   onSave: (settings: {
     whisperBasePath: string;
-    aiProvider: 'ollama' | 'lmstudio';
+    aiProvider: 'ollama' | 'lmstudio' | 'openai';
     ollamaPath: string;
     ollamaModel: string;
     lmstudioPath: string;
     lmstudioApiKey: string;
     lmstudioModel: string;
+    openaiBaseUrl: string;
+    openaiApiKey: string;
+    openaiModel: string;
     initialPrompt: string;
     summaryPrompt: string;
   }) => void;
@@ -27,10 +30,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
   } = useSettingsStore();
 
   const [whisperBasePath, setWhisperBasePath] = useState(settings.whisperBasePath);
-  const [aiProvider, setAiProvider] = useState<'ollama' | 'lmstudio'>(settings.aiProvider);
+  const [aiProvider, setAiProvider] = useState<'ollama' | 'lmstudio' | 'openai'>(settings.aiProvider);
   const [lmstudioPath, setLmstudioPath] = useState(settings.lmstudioPath || '');
   const [lmstudioApiKey, setLmstudioApiKey] = useState(settings.lmstudioApiKey || '');
   const [lmstudioModel, setLmstudioModel] = useState(settings.lmstudioModel || '');
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState(settings.openaiBaseUrl || '');
+  const [openaiApiKey, setOpenaiApiKey] = useState(settings.openaiApiKey || '');
+  const [openaiModel, setOpenaiModel] = useState(settings.openaiModel || '');
   const [ollamaPath, setOllamaPath] = useState(settings.ollamaPath);
   const [ollamaModel, setOllamaModel] = useState(settings.ollamaModel);
   const [initialPrompt, setInitialPrompt] = useState(settings.initialPrompt);
@@ -52,6 +58,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
     setLmstudioPath(settings.lmstudioPath || '');
     setLmstudioApiKey(settings.lmstudioApiKey || '');
     setLmstudioModel(settings.lmstudioModel || '');
+    setOpenaiBaseUrl(settings.openaiBaseUrl || '');
+    setOpenaiApiKey(settings.openaiApiKey || '');
+    setOpenaiModel(settings.openaiModel || '');
     setInitialPrompt(settings.initialPrompt);
     setSummaryPrompt(settings.summaryPrompt || '');
   }, [settings]);
@@ -70,6 +79,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
         lmstudioPath,
         lmstudioApiKey,
         lmstudioModel,
+        openaiBaseUrl,
+        openaiApiKey,
+        openaiModel,
         initialPrompt,
         summaryPrompt
       };
@@ -113,7 +125,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
             <label>AI Provider</label>
             <select
               value={aiProvider}
-              onChange={(e) => setAiProvider(e.target.value as 'ollama' | 'lmstudio')}
+              onChange={(e) => setAiProvider(e.target.value as 'ollama' | 'lmstudio' | 'openai')}
               style={{
                 width: '100%',
                 padding: '0.5rem',
@@ -123,6 +135,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
             >
               <option value="ollama">Ollama</option>
               <option value="lmstudio">LM Studio</option>
+              <option value="openai">OpenAI</option>
             </select>
           </div>
 
@@ -201,6 +214,56 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ show, onClose, onSave }) 
                   value={lmstudioModel}
                   onChange={(e) => setLmstudioModel(e.target.value)}
                   placeholder="Enter LM Studio model name"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+            </>
+          )}
+
+          {aiProvider === 'openai' && (
+            <>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>OpenAI Base URL</label>
+                <input
+                  type="text"
+                  value={openaiBaseUrl}
+                  onChange={(e) => setOpenaiBaseUrl(e.target.value)}
+                  placeholder="Enter OpenAI base URL (e.g., https://api.openai.com/v1)"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>OpenAI API Key</label>
+                <input
+                  type="password"
+                  value={openaiApiKey}
+                  onChange={(e) => setOpenaiApiKey(e.target.value)}
+                  placeholder="Enter OpenAI API key"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>OpenAI Model</label>
+                <input
+                  type="text"
+                  value={openaiModel}
+                  onChange={(e) => setOpenaiModel(e.target.value)}
+                  placeholder="Enter OpenAI model (e.g., gpt-4, gpt-3.5-turbo)"
                   style={{
                     width: '100%',
                     padding: '0.5rem',

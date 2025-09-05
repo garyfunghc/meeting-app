@@ -18,6 +18,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     lmstudioPath: '',
     lmstudioApiKey: '',
     lmstudioModel: '',
+    openaiBaseUrl: '',
+    openaiApiKey: '',
+    openaiModel: '',
     initialPrompt: '',
     summaryPrompt: ''
   },
