@@ -1,13 +1,71 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { debounce } from 'lodash';
 import { useMeetings } from '../hooks/useMeetings';
 import ReviewConfirmationModal from './ReviewConfirmationModal';
-import TranscriptOverwriteModal from './TranscriptOverwriteModal';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import '../jspdf-custom'; // For Chinese font support
 import { exportTranscriptToCSV } from '../services/meetingService';
+
+// Memoized row component to prevent unnecessary re-renders
+interface TranscriptionRowProps {
+  item: {
+    timestamp: string;
+    speaker: string;
+    content: string;
+  };
+  index: number;
+  currentSegment: number | null;
+  speakers: string[];
+  onSpeakerChange: (index: number, value: string) => void;
+  onContentChange: (index: number, value: string) => void;
+  onTimestampClick: (index: number, timestamp: string) => void;
+}
+
+const TranscriptionRow = memo(({
+  item,
+  index,
+  currentSegment,
+  speakers,
+  onSpeakerChange,
+  onContentChange,
+  onTimestampClick
+}: TranscriptionRowProps) => {
+  return (
+    <tr className="transcription-row">
+      <td
+        className={`time-cell ${currentSegment === index ? 'playing' : ''}`}
+        onClick={() => onTimestampClick(index, item.timestamp)}
+        style={{ cursor: 'pointer' }}
+      >
+        {item.timestamp}
+      </td>
+      <td className="speaker-cell">
+        <input
+          type="text"
+          value={item.speaker}
+          onChange={(e) => onSpeakerChange(index, e.target.value)}
+          list="speaker-suggestions"
+          style={{ width: '100%' }}
+        />
+        <datalist id="speaker-suggestions">
+          {speakers.map((s, idx) => (
+            <option key={idx} value={s} />
+          ))}
+        </datalist>
+      </td>
+      <td className="content-cell">
+        <AutoResizeTextarea
+          value={item.content}
+          onChange={(e) => onContentChange(index, e.target.value)}
+        />
+      </td>
+    </tr>
+  );
+});
+
+TranscriptionRow.displayName = 'TranscriptionRow';
 interface MeetingViewProps {
   meetingId: string;
   onDeleteMeeting: (id: string) => void;
@@ -139,24 +197,45 @@ const MeetingView: React.FC<MeetingViewProps> = ({ meetingId, onDeleteMeeting })
   }, [transcription]);
 
   const updateTranscriptLine = (index: number, speaker: string, content: string) => {
-    // Update JSON array - ensure speaker is never undefined
-    const newJson = [...transcriptJson];
-    newJson[index] = {
-      timestamp: newJson[index].timestamp,
-      speaker: speaker || '', // Ensure empty string instead of undefined
-      content
-    };
-    setTranscriptJson(newJson);
+    // Get current timestamp before updating to avoid async issues
+    const currentTimestamp = transcriptJson[index]?.timestamp || '00:00:00';
+    
+    // Update JSON array using functional update to avoid copying entire array
+    setTranscriptJson(prevJson => {
+      const updatedJson = [...prevJson];
+      updatedJson[index] = {
+        timestamp: currentTimestamp,
+        speaker: speaker || '',
+        content
+      };
+      return updatedJson;
+    });
 
-    // Maintain lines array with consistent formatting
-    const newLines = [...transcriptLines];
-    const timestamp = `[${newJson[index].timestamp}]`;
-    const speakerPart = `[${speaker}]`; // Always include brackets
-    newLines[index] = `${timestamp} ${speakerPart} ${content}`.trim();
-    console.log(newLines[index]);
-    setTranscriptLines(newLines);
+    // Update lines array and return the updated full transcript
+    setTranscriptLines(prevLines => {
+      const updatedLines = [...prevLines];
+      const timestamp = `[${currentTimestamp}]`;
+      const speakerPart = `[${speaker}]`;
+      updatedLines[index] = `${timestamp} ${speakerPart} ${content}`.trim();
+      
+      const updatedFullTranscript = updatedLines.join('\n');
+      
+      // Update the transcription state with the new full transcript
+      setTranscription(updatedFullTranscript);
+      
+      return updatedLines;
+    });
 
-    return newLines.join('\n');
+    // Since state updates are async, we need to construct the updated transcript manually for immediate return
+    const updatedLines = [...transcriptLines];
+    const timestamp = `[${currentTimestamp}]`;
+    const speakerPart = `[${speaker}]`;
+    updatedLines[index] = `${timestamp} ${speakerPart} ${content}`.trim();
+    const updatedFullTranscript = updatedLines.join('\n');
+    
+    console.log("updatedFullTranscript+++", updatedFullTranscript);
+    
+    return updatedFullTranscript;
   };
 
   const debouncedSpeakerApiUpdate = useRef(
@@ -191,16 +270,20 @@ const MeetingView: React.FC<MeetingViewProps> = ({ meetingId, onDeleteMeeting })
   };
 
   const applySpeakerChange = (index: number, value: string) => {
-    const fullTranscript = updateTranscriptLine(
-      index,
-      value,
-      transcriptLines[index].replace(/^\[\d{2}:\d{2}:\d{2}\]\s*\[[^\]]+\]\s*/, '')
-    );
+    // Use the current content from the already-parsed transcriptJson
+    const currentContent = transcriptJson[index]?.content || '';
+    
+    const fullTranscript = updateTranscriptLine(index, value, currentContent);
     setTranscription(fullTranscript);
 
-    // Add new speaker to suggestions if not already present
-    if (value && !speakers.includes(value)) {
-      setSpeakers([...speakers, value]);
+    // Add new speaker to suggestions if not already present using functional update
+    if (value) {
+      setSpeakers(prevSpeakers => {
+        if (!prevSpeakers.includes(value)) {
+          return [...prevSpeakers, value];
+        }
+        return prevSpeakers;
+      });
     }
 
     debouncedSpeakerApiUpdate.cancel();
@@ -208,8 +291,8 @@ const MeetingView: React.FC<MeetingViewProps> = ({ meetingId, onDeleteMeeting })
   };
 
   const applyContentChange = (index: number, value: string) => {
-    const speakerMatch = transcriptLines[index].match(/\[([^\]]+)\]/g);
-    const speaker = speakerMatch && speakerMatch[1] ? speakerMatch[1].replace(/[\[\]]/g, '') : 'Speaker';
+    // Use the current speaker from the already-parsed transcriptJson
+    const speaker = transcriptJson[index]?.speaker || 'Speaker';
     const fullTranscript = updateTranscriptLine(index, speaker, value);
     setTranscription(fullTranscript);
     debouncedContentApiUpdate.cancel();
@@ -427,35 +510,16 @@ const MeetingView: React.FC<MeetingViewProps> = ({ meetingId, onDeleteMeeting })
             </thead>
             <tbody>
               {transcriptJson.map((item, i) => (
-                <tr key={i} className="transcription-row">
-                  <td
-                    className={`time-cell ${currentSegment === i ? 'playing' : ''}`}
-                    onClick={() => handleTimestampClick(i, item.timestamp)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {item.timestamp}
-                  </td>
-                  <td className="speaker-cell">
-                    <input
-                      type="text"
-                      value={item.speaker}
-                      onChange={(e) => handleSpeakerChange(i, e.target.value)}
-                      list="speaker-suggestions"
-                      style={{ width: '100%' }}
-                    />
-                    <datalist id="speaker-suggestions">
-                      {speakers.map((s, idx) => (
-                        <option key={idx} value={s} />
-                      ))}
-                    </datalist>
-                  </td>
-                  <td className="content-cell">
-                    <AutoResizeTextarea
-                      value={item.content}
-                      onChange={(e) => handleContentChange(i, e.target.value)}
-                    />
-                  </td>
-                </tr>
+                <TranscriptionRow
+                  key={i}
+                  item={item}
+                  index={i}
+                  currentSegment={currentSegment}
+                  speakers={speakers}
+                  onSpeakerChange={handleSpeakerChange}
+                  onContentChange={handleContentChange}
+                  onTimestampClick={handleTimestampClick}
+                />
               ))}
             </tbody>
           </table>
