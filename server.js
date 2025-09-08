@@ -52,7 +52,7 @@ const defaultSummaryPrompt = `Generate a formal business meeting minutes documen
                     - Use bullet points for clarity.
                   - Action Items: Present in a table with columns: Task, Owner, Deadline, Notes.
                   - Other Notes: Any additional items or follow-ups.
-                  - Footer: Recorder’s name and next meeting date (if confirmed).
+                  - Footer: Recorder's name and next meeting date (if confirmed).
                   
                   Requirements:
                   - Maintain a professional tone.
@@ -123,7 +123,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 100 * 1024 * 1024 // 100MB limit
+    fileSize: 500 * 1024 * 1024 // 100MB limit
   }
 });
 
@@ -138,17 +138,15 @@ app.use('/uploads', express.static(uploadsDir));
 app.get('/api/meetings', (req, res) => {
   db.all('SELECT id, title, language, created_at FROM meetings ORDER BY created_at DESC', [], (err, meetings) => {
     if (err) {
-      return res.status(500).json({ error: 'Failed to get meetings' });
+      console.error('Database error:', err);
+      return res.status(500).json({ error: 'Failed to get meetings', details: err.message });
     }
     res.json(meetings);
   });
 });
 
-// Export app for Electron to use
-module.exports = { app, server };
-
 // Helper functions
-async function transcribeWithFasterWhisper(audioPath, whisperBasePath, language = 'en', initialPrompt) {
+async function transcribeWithFasterWhisper(audioPath, whisperBasePath, language = 'auto', initialPrompt) {
   try {
     // If custom whisper path is provided, use it
     if (!whisperBasePath) {
@@ -164,7 +162,7 @@ async function transcribeWithFasterWhisper(audioPath, whisperBasePath, language 
 
     const params = new URLSearchParams();
     params.append('task', 'transcribe');
-    params.append('language', language || 'en');
+    params.append('language', language || 'auto');
     params.append('output', 'json');
     params.append('word_timestamps', 'true');
     params.append('initial_prompt', initialPrompt || `This is a professional meeting recording with multiple speakers.  The discussion may include project updates, action items, deadlines, and strategic planning.  Speakers use common business terms like 'KPIs,' 'ROI,' 'milestones,' and 'stakeholders.'  Transcribe with proper punctuation, capitalization, and paragraph breaks for clarity.  Ignore filler words like 'um,' 'uh,' or 'you know' unless critical to context.`);
@@ -190,11 +188,11 @@ async function transcribeWithFasterWhisper(audioPath, whisperBasePath, language 
     return response.data || 'Transcription failed';
   } catch (error) {
     console.error('Faster-Whisper transcription error:', error.message);
-    return 'Transcription failed. Please check your faster-whisper service.';
+    return JSON.stringify(error);
   }
 }
 
-async function reviewTrascription(transcription, ollamaUrl, ollamaModel = 'qwen3:8b', prompt) {
+async function reviewTranscription(transcription, ollamaUrl, ollamaModel = 'qwen3:8b', prompt) {
   try {
     const response = await axios.post(`${ollamaUrl}/api/chat`, {
       model: ollamaModel,
@@ -220,7 +218,7 @@ async function reviewTrascription(transcription, ollamaUrl, ollamaModel = 'qwen3
     });
 
     if (!response.data?.message?.content) {
-      throw new Error('Invalid response format from Ollama');
+      return 'Invalid response format from Ollama';
     }
 
     return response.data.message.content;
@@ -229,7 +227,7 @@ async function reviewTrascription(transcription, ollamaUrl, ollamaModel = 'qwen3
     if (error.response) {
       console.error('Ollama API error response:', error.response.data);
     }
-    return 'Failed to generate summary. Please check your Ollama settings and try again.';
+    return 'Failed to generate summary. Please check your Ollama settings and try again';
   }
 }
 
@@ -259,7 +257,7 @@ async function generateSummary(transcription, ollamaUrl, ollamaModel = 'qwen3:8b
     });
 
     if (!response.data?.message?.content) {
-      throw new Error('Invalid response format from Ollama');
+      return ('Invalid response format from Ollama');
     }
 
     return response.data.message.content;
@@ -268,7 +266,7 @@ async function generateSummary(transcription, ollamaUrl, ollamaModel = 'qwen3:8b
     if (error.response) {
       console.error('Ollama API error response:', error.response.data);
     }
-    return 'Failed to generate summary. Please check your Ollama settings and try again.';
+    return (`Failed to generate summary. Please check your Ollama settings and try again: ${JSON.stringify(error)}`);
   }
 }
 
@@ -298,7 +296,7 @@ async function reviewWithLMStudio(transcription, apiKey, model, prompt, lmstudio
     });
 
     if (!response.data?.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response format from LM Studio');
+      return ('Invalid response format from LM Studio');
     }
 
     return response.data.choices[0].message.content;
@@ -307,7 +305,7 @@ async function reviewWithLMStudio(transcription, apiKey, model, prompt, lmstudio
     if (error.response) {
       console.error('LM Studio API error response:', error.response.data);
     }
-    return 'Failed to review transcript with LM Studio. Please check your LM Studio settings and try again.';
+    return (`Failed to generate summary. Please check your LM Studio settings and try again: ${JSON.stringify(error)}`);
   }
 }
 
@@ -336,7 +334,7 @@ async function generateSummaryWithLMStudio(transcription, apiKey, model, prompt,
     });
 
     if (!response.data?.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response format from LM Studio');
+      return ('Invalid response format from LM Studio');
     }
 
     return response.data.choices[0].message.content;
@@ -345,7 +343,84 @@ async function generateSummaryWithLMStudio(transcription, apiKey, model, prompt,
     if (error.response) {
       console.error('LM Studio API error response:', error.response.data);
     }
-    return 'Failed to generate summary with LM Studio. Please check your LM Studio settings and try again.';
+    return (`Failed to generate summary with LM Studio. Please check your LM Studio settings and try again: ${JSON.stringify(error)}`);
+  }
+}
+
+// OpenAI API functions
+async function generateSummaryWithOpenAI(transcription, apiKey, model, prompt, openaiBaseUrl = 'https://api.openai.com/v1') {
+  try {
+    const response = await axios.post(`${openaiBaseUrl}/chat/completions`, {
+      model: model,
+      messages: [
+        {
+          role: 'system',
+          content: ``
+        },
+        {
+          role: 'user',
+          content: `${prompt} ${transcription}`
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: 4000
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      timeout: 1000 * 60 * 60
+    });
+
+    if (!response.data?.choices?.[0]?.message?.content) {
+      return ('Invalid response format from OpenAI');
+    }
+
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('OpenAI summary error:', error);
+    if (error.response) {
+      console.error('OpenAI API error response:', error.response.data);
+    }
+    return (`Failed to generate summary with OpenAI. Please check your OpenAI settings and try again: ${JSON.stringify(error)}`);
+  }
+}
+
+async function reviewWithOpenAI(transcription, apiKey, model, prompt, openaiBaseUrl = 'https://api.openai.com/v1') {
+  try {
+    const response = await axios.post(`${openaiBaseUrl}/chat/completions`, {
+      model: model,
+      messages: [
+        {
+          role: 'system',
+          content: `Respond concisely with only the answer to my question. Do not add any extra text, disclaimers, or commentary`
+        },
+        {
+          role: 'user',
+          content: `${prompt || defaultReviewPrompt}: ${transcription}`
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 4000
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      timeout: 1000 * 60 * 60
+    });
+
+    if (!response.data?.choices?.[0]?.message?.content) {
+      return ('Invalid response format from OpenAI');
+    }
+
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('OpenAI review error:', error);
+    if (error.response) {
+      console.error('OpenAI API error response:', error.response.data);
+    }
+    return (`Failed to review transcript with OpenAI. Please check your OpenAI settings and try again: ${JSON.stringify(error)}`);
   }
 }
 
@@ -368,7 +443,7 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
       function (err) {
         if (err) {
           console.error('Database error:', err);
-          return res.status(500).json({ error: 'Failed to save meeting' });
+          return res.status(500).json({ error: 'Failed to save meeting', details: err.message });
         }
 
         res.json({
@@ -381,7 +456,7 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
     );
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    res.status(500).json({ error: 'Failed to upload file', details: error });
   }
 });
 
@@ -406,17 +481,20 @@ app.post('/api/meeting/:meetingId/transcription/', async (req, res) => {
 
       // Get transcription settings
       db.all('SELECT key, value FROM settings WHERE key IN (?, ?, ?)',
-        ['whisper_path', 'initial_prompt'], async (err, settings) => {
+        ['whisper_base_path', 'initial_prompt'], async (err, settings) => {
 
           if (err) {
-            return res.status(500).json({ error: 'Failed to get settings' });
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Failed to get settings', details: err });
           }
+
+          console.log("settings", settings)
 
           const settingsMap = {};
           settings.forEach(setting => {
             settingsMap[setting.key] = setting.value;
           });
-
+          console.log("settingsMap", settingsMap);
           // Transcribe with faster-whisper using meeting language
           const transcription = await transcribeWithFasterWhisper(
             meeting.audio_file_path,
@@ -433,7 +511,7 @@ app.post('/api/meeting/:meetingId/transcription/', async (req, res) => {
               (err) => {
                 if (err) {
                   console.error('Database update error:', err);
-                  return res.status(500).json({ error: 'Failed to save transcription' });
+                  return res.status(500).json({ error: 'Failed to save transcription', details: err });
                 }
 
                 res.json({
@@ -445,13 +523,13 @@ app.post('/api/meeting/:meetingId/transcription/', async (req, res) => {
 
           } catch (error) {
             console.error('Transcription error:', error);
-            res.status(500).json({ error: 'Failed to transcribe audio with Ollama' });
+            res.status(500).json({ error: 'Failed to transcribe audio with Ollama', details: error });
           }
         });
     });
   } catch (error) {
     console.error('Transcribe error:', error);
-    res.status(500).json({ error: 'Failed to transcribe audio' });
+    res.status(500).json({ error: 'Failed to transcribe audio', details: error });
   }
 });
 
@@ -464,7 +542,8 @@ app.get('/api/meeting/:meetingId/transcription', (req, res) => {
     [meetingId],
     (err, meeting) => {
       if (err) {
-        return res.status(500).json({ error: 'Failed to get transcription' });
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Failed to get transcription', details: err });
       }
 
       if (!meeting) {
@@ -485,7 +564,8 @@ app.get('/api/meeting/:meetingId/transcription-with-speaker', (req, res) => {
     [meetingId],
     (err, meeting) => {
       if (err) {
-        return res.status(500).json({ error: 'Failed to get transcription with speaker' });
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Failed to get transcription with speaker', details: err });
       }
 
       if (!meeting) {
@@ -613,8 +693,8 @@ app.post('/api/meeting/:meetingId/transcription/review', async (req, res) => {
       }
 
       // Get AI provider settings
-      db.all('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?, ?)', 
-        ['ai_provider', 'ollama_url', 'ollama_model', 'lmstudio_path', 'lmstudio_api_key', 'lmstudio_model'], 
+      db.all('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?, ?, ?, ?, ?)', 
+        ['ai_provider', 'ollama_path', 'ollama_model', 'lmstudio_path', 'lmstudio_api_key', 'lmstudio_model', 'openai_base_url', 'openai_api_key', 'openai_model'], 
         async (err, settings) => {
           if (err) {
             return res.status(500).json({ error: 'Failed to get settings' });
@@ -646,12 +726,28 @@ app.post('/api/meeting/:meetingId/transcription/review', async (req, res) => {
                 `${transcriptToReview}`,
                 lmstudioUrl
               );
+            } else if (aiProvider === 'openai') {
+              const openaiBaseUrl = settingsMap.openai_base_url || 'https://api.openai.com/v1';
+              const apiKey = settingsMap.openai_api_key;
+              const model = settingsMap.openai_model || 'gpt-3.5-turbo';
+              
+              if (!apiKey) {
+                return res.status(400).json({ error: 'OpenAI API key is required' });
+              }
+
+              reviewedTranscript = await reviewWithOpenAI(
+                transcriptToReview,
+                apiKey,
+                model,
+                `${transcriptToReview}`,
+                openaiBaseUrl
+              );
             } else {
               // Default to Ollama
-              const ollamaUrl = settingsMap.ollama_url || 'http://localhost:11434';
+              const ollamaUrl = settingsMap.ollama_path || 'http://localhost:11434';
               const ollamaModel = settingsMap.ollama_model || 'qwen3:8b';
 
-              reviewedTranscript = await reviewTrascription(
+              reviewedTranscript = await reviewTranscription(
                 transcriptToReview,
                 ollamaUrl,
                 ollamaModel,
@@ -708,12 +804,14 @@ app.post('/api/summary/:meetingId', async (req, res) => {
       }
 
       // Get AI provider settings and summary prompt
-      db.all('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?, ?, ?)', 
-        ['ai_provider', 'ollama_url', 'ollama_model', 'lmstudio_path', 'lmstudio_api_key', 'lmstudio_model', 'summary_prompt'], 
+      db.all('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 
+        ['ai_provider', 'ollama_path', 'ollama_model', 'lmstudio_path', 'lmstudio_api_key', 'lmstudio_model', 'openai_base_url', 'openai_api_key', 'openai_model', 'summary_prompt'], 
         async (err, settings) => {
           if (err) {
             return res.status(500).json({ error: 'Failed to get settings' });
           }
+
+          console.log("settings", settings)
 
           const settingsMap = {};
           settings.forEach(setting => {
@@ -745,9 +843,25 @@ app.post('/api/summary/:meetingId', async (req, res) => {
                 prompt,
                 lmstudioUrl
               );
+            } else if (aiProvider === 'openai') {
+              const openaiBaseUrl = settingsMap.openai_base_url || 'https://api.openai.com/v1';
+              const apiKey = settingsMap.openai_api_key;
+              const model = settingsMap.openai_model || 'gpt-3.5-turbo';
+              console.log("openai!!");
+              if (!apiKey) {
+                return res.status(400).json({ error: 'OpenAI API key is required' });
+              }
+
+              summary = await generateSummaryWithOpenAI(
+                meeting.transcription_with_speaker,
+                apiKey,
+                model,
+                prompt,
+                openaiBaseUrl
+              );
             } else {
               // Default to Ollama
-              const ollamaUrl = settingsMap.ollama_url || 'http://localhost:11434';
+              const ollamaUrl = settingsMap.ollama_path || 'http://localhost:11434';
               const ollamaModel = settingsMap.ollama_model || 'qwen3:8b';
 
               summary = await generateSummary(
@@ -863,7 +977,7 @@ app.get('/api/meeting/:meetingId', (req, res) => {
     const response = {
       ...meeting,
       audio_url: meeting.audio_file_path
-            ? `${NODE_ENV === 'prod' ? '' : 'http://localhost:' + PORT}/uploads/${meeting.audio_file_path.split('/').pop()}`
+            ? `${NODE_ENV === 'prod' ? '' : 'http://localhost:' + PORT}/uploads/${path.basename(meeting.audio_file_path)}`
             : null
     };
 
@@ -949,14 +1063,13 @@ app.get('/api/settings', (req, res) => {
     settings.forEach(setting => {
       settingsObj[setting.key] = setting.value;
     });
-
     res.json(settingsObj);
   });
 });
 
 app.post('/api/settings', (req, res) => {
   const settings = req.body;
-
+  console.log(settings);
   const promises = Object.entries(settings).map(([key, value]) => {
     return new Promise((resolve, reject) => {
       db.run(
